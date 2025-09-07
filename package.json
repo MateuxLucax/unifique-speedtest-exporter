@@ -1,0 +1,23 @@
+{
+  "name": "unifique-speedtest-exporter",
+  "author": {
+    "name": "Mateus Brandt",
+    "email": "mateuxlucax@gmail.com",
+    "url": "https://github.com/MateuxLucax/unifique-speedtest-exporter"
+  },
+  "type": "module",
+  "private": false,
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts",
+    "docker:build": "docker build -t unifique-speedtest-exporter .",
+    "docker:run": "docker run -p 3000:3000 unifique-speedtest-exporter",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

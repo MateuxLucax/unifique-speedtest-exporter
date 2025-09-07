@@ -1,0 +1,9 @@
+services:
+  speedtest-exporter:
+    image: ghcr.io/mateuxlucax/unifique-speedtest-exporter:latest
+    container_name: unifique-speedtest-exporter
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    restart: unless-stopped
