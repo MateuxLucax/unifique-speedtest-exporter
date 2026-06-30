@@ -4,7 +4,9 @@
 *.test
 *.out
 
-# compare.sh worktree of the main branch
+# Local-only comparison tooling (used to produce PR data, not part of the repo)
+/compare.sh
+/compare.compose.yml
 /.compare/
 
 # dependencies (bun install)

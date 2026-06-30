@@ -13,6 +13,23 @@ The Unifique speed test is a stock [LibreSpeed](https://github.com/librespeed/sp
 
 > **Note:** the LibreSpeed backend only responds to requests originating from inside Unifique's own network, so this exporter must run on a Unifique connection.
 
+## Why a native Go exporter?
+
+Speaking the LibreSpeed HTTP protocol directly — instead of driving a real browser to scrape the rendered UI — collapses the runtime to a single dependency-free static binary:
+
+| | Playwright + Node | Native Go |
+| --- | --- | --- |
+| Container image | **2.13 GB** | **14.5 MB** (~150× smaller) |
+| Third-party dependencies | Playwright + bundled Chromium + transitive npm tree | **0** — standard library only |
+| Runtime | Node.js + a headless Chromium process | one static binary (distroless) |
+| Memory | launches a Chromium browser per scrape (hundreds of MB) | ~10 MiB steady |
+| Work per scrape | launches a browser and runs a full speed test on **every** scrape | serves a cached result instantly; the test runs on an interval |
+| Measurement | screen-scrapes the LibreSpeed UI via DOM selectors | speaks the LibreSpeed HTTP protocol directly |
+
+Zero third-party packages also means a minimal supply-chain attack surface — there is no `go.sum` because there is nothing to verify.
+
+<sub>Image sizes from `docker images`; memory from `docker stats`; measured locally on arm64.</sub>
+
 ## How to use
 
 The project can be run locally using Docker or Docker Compose. Follow the instructions below for your preferred method.
@@ -95,12 +112,7 @@ go run .
 # then: curl http://localhost:3000/metrics
 ```
 
-3. Compare against the original Playwright implementation on `main`:
-```bash
-./compare.sh        # builds both, runs them side by side, diffs the metrics
-```
-
-4. Make your changes, then submit a pull request with a description of them.
+3. Make your changes, then submit a pull request with a description of them.
 
 ## License
 
