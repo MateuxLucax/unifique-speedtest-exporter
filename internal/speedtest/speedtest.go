@@ -112,7 +112,11 @@ func NewClient() *http.Client {
 		ExpectContinueTimeout: 1 * time.Second,
 		// Disable compression so garbage data is measured at wire size.
 		DisableCompression: true,
-		ForceAttemptHTTP2:  false,
+		// HTTP/2 is disabled deliberately: LibreSpeed saturates the link with
+		// multiple parallel TCP connections. Over HTTP/2 the streams would
+		// multiplex onto a single connection and under-measure throughput on
+		// HTTP/2-capable servers. Do not "simplify" this away.
+		ForceAttemptHTTP2: false,
 	}
 	return &http.Client{Transport: transport}
 }

@@ -50,6 +50,14 @@ to_mbps() {
   awk -v v="$1" 'BEGIN { printf "%.2f", v / 1000000 }'
 }
 
+# The Go exporter serves zeros until its first background run finishes. Wait for
+# speed_test_success=1 so the first comparison row isn't a misleading Go=0.
+echo "==> Waiting for the Go exporter's first background run to complete"
+for _ in $(seq 1 40); do
+  [ "$(metric_value "$GO_URL" speed_test_success)" = "1" ] && break
+  sleep 5
+done
+
 printf '\n%-4s | %-22s | %-22s | %-14s | %-14s\n' "run" "download Mbps (pw/go)" "upload Mbps (pw/go)" "ping (pw/go)" "jitter (pw/go)"
 printf -- '-----+------------------------+------------------------+----------------+----------------\n'
 
