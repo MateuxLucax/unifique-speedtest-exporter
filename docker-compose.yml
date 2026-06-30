@@ -1,5 +1,8 @@
 services:
   speedtest-exporter:
+    # Builds from source locally; once merged to main, CI publishes this same
+    # tag to GHCR so `docker compose pull` fetches the prebuilt image instead.
+    build: .
     image: ghcr.io/mateuxlucax/unifique-speedtest-exporter:latest
     container_name: unifique-speedtest-exporter
     ports:
