@@ -36,7 +36,16 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", exp)
 
-	srv := &http.Server{Addr: ":" + port, Handler: mux}
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+		// Bound timeouts so slow clients can't tie up connections; /metrics only
+		// serves a small cached payload, so these are generous.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

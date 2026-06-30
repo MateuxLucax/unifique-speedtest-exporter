@@ -26,10 +26,12 @@ The project can be run locally using Docker or Docker Compose. Follow the instru
 2. Run the container:
 
    ```bash
-   docker run -p 3000:3000 ghcr.io/mateuxlucax/unifique-speedtest-exporter:latest
+   docker run -p 127.0.0.1:3000:3000 ghcr.io/mateuxlucax/unifique-speedtest-exporter:latest
    ```
 
 The exporter will be available at http://localhost:3000/metrics
+
+> **Security:** `/metrics` is unauthenticated and exposes your connection's performance data, so the examples bind to `127.0.0.1` (localhost only). To let a remote Prometheus scrape it, drop the `127.0.0.1:` prefix and put it behind trusted network controls (firewall / reverse proxy).
 
 ### Docker Compose
 
