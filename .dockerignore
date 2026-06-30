@@ -1,0 +1,42 @@
+# Keep the build context minimal: the build stage only needs go.mod and the
+# Go sources. Everything below is excluded so it never reaches the builder.
+
+# Version control and history
+.git
+.gitignore
+
+# CI / toolchain config (not needed to build)
+.github
+mise.toml
+
+# Docs and assets (not needed for `go build`)
+README.md
+CLAUDE.md
+LICENSE
+assets/
+
+# Compose files and the Dockerfile itself
+docker-compose.yml
+docker-compose.build.yml
+Dockerfile
+.dockerignore
+
+# Local build artifacts
+bin/
+*.test
+*.out
+
+# Local-only tooling (gitignored)
+compare.sh
+compare.compose.yml
+.compare/
+
+# Secrets / local env files
+.env
+.env.*
+*.pem
+*.key
+
+# OS / editor cruft
+.DS_Store
+*.log
