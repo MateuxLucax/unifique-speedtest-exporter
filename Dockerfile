@@ -1,15 +1,19 @@
-FROM node:24-trixie-slim
+# Build a static binary, then ship it on distroless.
+FROM golang:1.26-bookworm AS build
 
-WORKDIR /app
+WORKDIR /src
 
-COPY package.json package-lock.json* ./
+# No third-party dependencies, so there is no go.sum and nothing to download.
+COPY go.mod ./
 
-RUN npm ci
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/exporter .
 
-COPY src ./src
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN npx -y playwright@1.55.1 install --with-deps chromium
+COPY --from=build /out/exporter /exporter
 
+ENV PORT=3000
 EXPOSE 3000
 
-CMD ["npm", "start"]
+ENTRYPOINT ["/exporter"]

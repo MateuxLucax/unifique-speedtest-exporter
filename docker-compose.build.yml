@@ -1,9 +1,10 @@
-# Easy replication: pulls the prebuilt image published to GHCR on merge to main.
-#   docker compose up -d
-# To build from source instead, use docker-compose.build.yml.
+# Build from source — no published image required:
+#   docker compose -f docker-compose.build.yml up -d --build
+# For easy replication from the prebuilt image, use docker-compose.yml instead.
 services:
   speedtest-exporter:
-    image: ghcr.io/mateuxlucax/unifique-speedtest-exporter:latest
+    build: .
+    image: unifique-speedtest-exporter:local
     container_name: unifique-speedtest-exporter
     ports:
       # /metrics is unauthenticated, so bind to loopback by default. To let a
