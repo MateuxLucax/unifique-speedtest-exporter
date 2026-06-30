@@ -9,7 +9,7 @@ This project turns the [Unifique Speed Test](https://speed.unifique.com.br/) int
 
 The Unifique speed test is a stock [LibreSpeed](https://github.com/librespeed/speedtest) deployment, so the whole test is just concurrent HTTP requests against its `garbage.php` / `empty.php` backend. This exporter is a small, dependency-free Go program that speaks the LibreSpeed HTTP protocol directly. The test runs in the background on an interval and the results are cached, so every Prometheus scrape returns instantly instead of triggering a fresh, link-saturating test.
 
-> **Note:** the LibreSpeed backend only responds to requests originating from inside Unifique's own network, so this exporter must run on a Unifique connection.
+> **Note:** like opening the speed test in a browser, the exporter measures the connection of the machine it runs on against Unifique's servers — so run it on the connection you want to monitor.
 
 ## How to use
 

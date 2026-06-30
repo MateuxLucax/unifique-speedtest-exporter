@@ -24,7 +24,7 @@ type fakeBackend struct {
 func newFakeBackend() *fakeBackend {
 	fb := &fakeBackend{chunk: make([]byte, 64*1024)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/garbage.php", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backend/garbage.php", func(w http.ResponseWriter, r *http.Request) {
 		if fb.failAll {
 			http.Error(w, "nope", http.StatusNotFound)
 			return
@@ -36,7 +36,7 @@ func newFakeBackend() *fakeBackend {
 			}
 		}
 	})
-	mux.HandleFunc("/empty.php", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backend/empty.php", func(w http.ResponseWriter, r *http.Request) {
 		if fb.failAll {
 			http.Error(w, "nope", http.StatusNotFound)
 			return

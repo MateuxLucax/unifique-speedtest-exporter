@@ -3,12 +3,12 @@
 // LibreSpeed browser client performs — concurrent HTTP download/upload streams
 // plus a timed-request ping/jitter test — without driving a real browser.
 //
-// The target deployment is https://speed.unifique.com.br, a stock LibreSpeed
-// install whose default, root-relative endpoints are:
+// The target deployment is https://speed.unifique.com.br, a LibreSpeed install
+// whose endpoints live under backend/ (the path the speedtest_worker.js uses):
 //
-//	garbage.php?ckSize=N  download: server streams N MiB of incompressible data
-//	empty.php             upload (POST body discarded) and ping/jitter (timed GET)
-//	getIP.php             client IP / ISP info (not needed for the core metrics)
+//	backend/garbage.php?ckSize=N  download: server streams N MiB of incompressible data
+//	backend/empty.php             upload (POST body discarded) and ping/jitter (timed GET)
+//	backend/getIP.php             client IP / ISP info (not needed for the core metrics)
 package speedtest
 
 import (
@@ -74,24 +74,26 @@ type Config struct {
 	HTTPClient *http.Client
 }
 
-// DefaultConfig returns a Config populated with LibreSpeed's stock defaults,
-// which is what speed.unifique.com.br uses (its page sets only telemetry_level).
+// DefaultConfig returns a Config populated with the parameters that
+// speed.unifique.com.br's own speedtest_worker.js uses (its page sets only
+// telemetry_level, so the worker defaults apply). These values were read
+// directly from the deployed worker so the exporter's numbers track the site.
 func DefaultConfig(baseURL string) Config {
 	return Config{
 		BaseURL:                    baseURL,
-		DownloadPath:               "garbage.php",
-		UploadPath:                 "empty.php",
-		PingPath:                   "empty.php",
-		DownloadStreams:            6,
-		UploadStreams:              3,
-		DownloadDuration:           15 * time.Second,
-		UploadDuration:             15 * time.Second,
+		DownloadPath:               "backend/garbage.php",
+		UploadPath:                 "backend/empty.php",
+		PingPath:                   "backend/empty.php",
+		DownloadStreams:            25,
+		UploadStreams:              15,
+		DownloadDuration:           25 * time.Second,
+		UploadDuration:             25 * time.Second,
 		DownloadGrace:              1500 * time.Millisecond,
 		UploadGrace:                3 * time.Second,
 		CkSize:                     100,
 		UploadChunkBytes:           20 * 1024 * 1024,
 		PingCount:                  10,
-		OverheadCompensationFactor: 1.06,
+		OverheadCompensationFactor: 1.10,
 	}
 }
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Prometheus exporter for the Unifique speed test (https://speed.unifique.com.br), which is a stock **LibreSpeed** deployment. The whole speed test is just concurrent HTTP requests against LibreSpeed's `garbage.php` (download), `empty.php` (upload + ping/jitter), and `getIP.php` endpoints — so this exporter speaks that HTTP protocol directly in Go.
 
-Important deployment constraint: the LibreSpeed backend only answers requests originating **inside Unifique's network**, so the exporter (and any real test) must run on a Unifique connection. From anywhere else the `.php` endpoints return `404`, which the exporter surfaces as `speed_test_success 0`.
+The backend endpoints live under `backend/` (e.g. `backend/garbage.php`) — the path the deployed `speedtest_worker.js` uses; root-relative `garbage.php` returns `404`. The endpoints are public (not IP-gated), so the exporter measures the connection of whatever machine it runs on, just like running the speed test in a browser there.
 
 ## Commands
 
@@ -32,7 +32,7 @@ The four original metric names (`speed_download_bits_per_second`, `speed_upload_
 
 ## Measurement accuracy
 
-Speed tests are noisy (results vary ~10–30% run to run). The reported numbers are driven by the LibreSpeed parameters in `DefaultConfig` (stream counts, durations, grace times, `CkSize`, overhead factor); those are the knobs to adjust if the readings look off. Real results require running on a Unifique connection.
+Speed tests are noisy (results vary ~10–30% run to run). The reported numbers are driven by the parameters in `DefaultConfig` — these were read from the deployed `speedtest_worker.js` (25 download / 15 upload streams, 25 s, 1.5 s/3 s grace, `CkSize` 100, overhead 1.10) so the exporter tracks the site's own UI. Those are the knobs to adjust if readings look off.
 
 ## Deployment
 
