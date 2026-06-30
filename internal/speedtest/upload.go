@@ -50,11 +50,14 @@ func (c Config) measureUpload(ctx context.Context) (float64, error) {
 	wg.Wait()
 	close(errCh)
 
+	failErr, failed := collectErrs(errCh)
 	bps := throughputBps(endBytes-startBytes, endAt.Sub(startAt), c.OverheadCompensationFactor)
-	if bps == 0 {
-		if err := firstErr(errCh); err != nil {
-			return 0, fmt.Errorf("upload: %w", err)
-		}
+	// Bytes are counted as they are sent, before the server's status is known, so
+	// a backend that drains the upload and then returns a non-2xx status would
+	// otherwise report a positive speed. Fail when every stream errored
+	// regardless of throughput, and when no throughput was measured.
+	if failErr != nil && (failed == c.UploadStreams || bps == 0) {
+		return 0, fmt.Errorf("upload: %w", failErr)
 	}
 	return bps, nil
 }
@@ -84,7 +87,7 @@ func uploadStream(ctx context.Context, client *http.Client, url string, seq int,
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		if !statusOK(status) {
-			return fmt.Errorf("upload: unexpected status %d", status)
+			return fmt.Errorf("unexpected status %d", status)
 		}
 	}
 }

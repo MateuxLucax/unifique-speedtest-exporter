@@ -19,6 +19,10 @@ type fakeBackend struct {
 	pingDelay time.Duration
 	chunk     []byte
 	failAll   bool
+	// uploadStatus, when >= 400, is returned by empty.php on POST *after* the
+	// request body has been fully read — simulating a backend that consumes the
+	// upload and then fails.
+	uploadStatus int
 }
 
 func newFakeBackend() *fakeBackend {
@@ -44,6 +48,10 @@ func newFakeBackend() *fakeBackend {
 		if r.Method == http.MethodPost {
 			n, _ := io.Copy(io.Discard, r.Body)
 			fb.uploaded.Add(n)
+			if fb.uploadStatus >= 400 {
+				w.WriteHeader(fb.uploadStatus)
+				return
+			}
 		} else if fb.pingDelay > 0 {
 			time.Sleep(fb.pingDelay)
 		}

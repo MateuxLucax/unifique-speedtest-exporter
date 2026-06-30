@@ -43,13 +43,14 @@ func (c Config) measureDownload(ctx context.Context) (float64, error) {
 	wg.Wait()
 	close(errCh)
 
+	failErr, failed := collectErrs(errCh)
 	bps := throughputBps(endBytes-startBytes, endAt.Sub(startAt), c.OverheadCompensationFactor)
-	if bps == 0 {
-		// No measured throughput almost always means every stream errored
-		// (e.g. backend unreachable); surface that rather than reporting 0.
-		if err := firstErr(errCh); err != nil {
-			return 0, fmt.Errorf("download: %w", err)
-		}
+	// Surface a backend failure when every stream errored — even if some bytes
+	// were counted — and when no throughput was measured at all. A positive byte
+	// count is not proof of success (see the upload path, where the body is sent
+	// before the server's status is known).
+	if failErr != nil && (failed == c.DownloadStreams || bps == 0) {
+		return 0, fmt.Errorf("download: %w", failErr)
 	}
 	return bps, nil
 }
@@ -76,7 +77,7 @@ func downloadStream(ctx context.Context, client *http.Client, baseURL string, se
 		}
 		if !statusOK(resp.StatusCode) {
 			resp.Body.Close()
-			return fmt.Errorf("download: unexpected status %d", resp.StatusCode)
+			return fmt.Errorf("unexpected status %d", resp.StatusCode)
 		}
 		_, err = io.Copy(countingWriter{counter}, resp.Body)
 		resp.Body.Close()
@@ -98,11 +99,19 @@ func sampleAfter(ctx context.Context, grace time.Duration, counter *byteCounter)
 	return counter.load(), time.Now()
 }
 
-func firstErr(ch <-chan error) error {
+// collectErrs drains ch and returns the first non-nil error along with the
+// total number of errors — one per failed stream, since each stream reports at
+// most one error before exiting.
+func collectErrs(ch <-chan error) (error, int) {
+	var first error
+	count := 0
 	for err := range ch {
 		if err != nil {
-			return err
+			if first == nil {
+				first = err
+			}
+			count++
 		}
 	}
-	return nil
+	return first, count
 }
