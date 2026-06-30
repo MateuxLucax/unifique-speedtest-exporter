@@ -9,7 +9,9 @@
 
 This project turns the [Unifique Speed Test](https://speed.unifique.com.br/) into a Prometheus metrics endpoint.
 
-> This is mostly a Proof of Concept. I still plan to move away from Playwright and Node. However right now I just want a quick and easy way to record speed test metrics.
+The Unifique speed test is a stock [LibreSpeed](https://github.com/librespeed/speedtest) deployment, so the whole test is just concurrent HTTP requests against its `garbage.php` / `empty.php` backend. This exporter is a small Go program that reproduces that measurement natively — no headless browser. The test runs in the background on an interval and the results are cached, so every Prometheus scrape returns instantly instead of triggering a fresh, link-saturating test.
+
+> **Note:** the LibreSpeed backend only responds to requests originating from inside Unifique's own network, so this exporter must run on a Unifique connection.
 
 ## How to use
 
@@ -44,6 +46,22 @@ The following metrics are exposed:
 - `speed_ping_ms`: Ping time in milliseconds
 - `speed_jitter_ms`: Jitter time in milliseconds
 
+Plus exporter health metrics:
+
+- `speed_test_success`: `1` if the last test succeeded, `0` otherwise
+- `speed_test_duration_seconds`: how long the last test run took
+- `speed_test_last_run_timestamp_seconds`: Unix timestamp of the last run
+
+### Configuration
+
+The exporter is configured via environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | Port the `/metrics` endpoint listens on |
+| `SPEEDTEST_URL` | `https://speed.unifique.com.br` | LibreSpeed origin to test against |
+| `RUN_INTERVAL` | `10m` | How often to run the test in the background (Go duration, e.g. `5m`, `1h`) |
+
 ### Prometheus configuration
 
 ```yaml
@@ -64,21 +82,25 @@ You can also visualize the metrics in Grafana by importing the [Grafana dashboar
 
 ## Development & Contribution
 
-To contribute to the project, first clone it then follow these steps:
+The exporter is a standard Go module ([mise](https://mise.jdx.dev/) pins the toolchain via `mise.toml`).
 
-1. Install dependencies:
+1. Run the tests:
 ```bash
-npm install
+go test ./...
 ```
 
-2. Run the development server:
+2. Run it locally (must be on a Unifique connection to get real results):
 ```bash
-npm run dev
+go run .
+# then: curl http://localhost:3000/metrics
 ```
 
-3. Make your changes and test them locally.
+3. Compare against the original Playwright implementation on `main`:
+```bash
+./compare.sh        # builds both, runs them side by side, diffs the metrics
+```
 
-4. Submit a pull request with a description of your changes.
+4. Make your changes, then submit a pull request with a description of them.
 
 ## License
 
