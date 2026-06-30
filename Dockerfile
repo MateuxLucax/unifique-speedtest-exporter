@@ -3,8 +3,8 @@ FROM golang:1.26-bookworm AS build
 
 WORKDIR /src
 
-COPY go.mod go.sum ./
-RUN go mod download
+# No third-party dependencies, so there is no go.sum and nothing to download.
+COPY go.mod ./
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/exporter .

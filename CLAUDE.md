@@ -18,8 +18,9 @@ go test ./internal/speedtest -run TestMeasureDownload -v   # a single test
 go build -o bin/exporter .   # build the binary
 go run .                # run locally on :3000 (real results need a Unifique line)
 go vet ./... && gofmt -l .   # vet + format check
-./compare.sh [N]        # build main (Playwright) + this Go build, run both, diff metrics
 ```
+
+Local-only comparison tooling (`compare.sh` / `compare.compose.yml`) is gitignored and not part of the repo; it exists only to produce side-by-side data for PR descriptions and must run on a Unifique connection.
 
 ## Architecture
 
@@ -27,14 +28,14 @@ Two internal packages plus a thin `main.go`:
 
 - **`internal/speedtest`** — the native LibreSpeed client. `Config` (seed it with `DefaultConfig`, which carries LibreSpeed's stock parameters) has a `Run(ctx)` that executes ping → download → upload **sequentially** so phases never contend for the link, returning a `Result` (download/upload in bits/sec, ping/jitter in ms). Each phase lives in its own file: `ping.go` (sequential timed GETs; ping = min RTT, jitter via the asymmetric EWMA in `jitterEWMA`), `download.go` and `upload.go` (N concurrent streams summed into the atomic `byteCounter`, discarding a slow-start grace window before measuring). `throughputBps` applies LibreSpeed's overhead-compensation factor (1.06) so numbers line up with the site's UI. Non-2xx responses fail the test rather than counting error-page bytes.
 
-- **`internal/exporter`** — bridges the test to Prometheus. `Exporter` runs the test in a background goroutine on `RUN_INTERVAL`, caches results as gauges, and serves them instantly on scrape. A `sync.Mutex.TryLock` provides single-flight: overlapping triggers are skipped (return `ErrBusy`), never queued, so two link-saturating tests can't overlap. Failed runs set `speed_test_success=0` but **leave the last good speed gauges intact**. It depends on a `Runner` interface (which `speedtest.Config` satisfies), so tests drive it with a fake runner.
+- **`internal/exporter`** — bridges the test to Prometheus. `Exporter` runs the test in a background goroutine on `RUN_INTERVAL`, caches the latest result, and serves it instantly on scrape. It implements `http.Handler` and emits the Prometheus **text exposition format directly from the standard library** (`writeGauge`) — there is intentionally **no `prometheus/client_golang` dependency**, keeping the module at zero third-party packages for a minimal supply-chain surface. A `sync.Mutex.TryLock` (`runMu`) provides single-flight: overlapping triggers are skipped (return `ErrBusy`), never queued, so two link-saturating tests can't overlap; a separate `sync.RWMutex` (`mu`) guards the cached snapshot so scrapes never block on a run. Failed runs set `speed_test_success=0` but **leave the last good values intact**. It depends on a `Runner` interface (which `speedtest.Config` satisfies), so tests drive it with a fake runner.
 
 The four original metric names (`speed_download_bits_per_second`, `speed_upload_bits_per_second`, `speed_ping_ms`, `speed_jitter_ms`) are preserved for drop-in compatibility; health metrics (`speed_test_success`, `speed_test_duration_seconds`, `speed_test_last_run_timestamp_seconds`) were added.
 
 ## Matching the reference (`main`)
 
-The goal of this branch is to reproduce the Playwright implementation's numbers with a smaller, simpler build. Speed tests are noisy (10–30% run to run), so "correct" means **same ballpark over several runs**, not exact equality. The knobs that drive comparability are the LibreSpeed parameters in `DefaultConfig` (stream counts, durations, grace times, `CkSize`, overhead factor). Use `./compare.sh` to validate side by side on a Unifique connection.
+The goal of this branch is to reproduce the Playwright implementation's numbers with a smaller, simpler build. Speed tests are noisy (10–30% run to run), so "correct" means **same ballpark over several runs**, not exact equality. The knobs that drive comparability are the LibreSpeed parameters in `DefaultConfig` (stream counts, durations, grace times, `CkSize`, overhead factor). Validate side by side on a Unifique connection using the local-only comparison tooling.
 
 ## Deployment
 
-Pushes to `main` build and publish a multi-tag image to `ghcr.io/mateuxlucax/unifique-speedtest-exporter` via `.github/workflows/docker-publish.yml` (language-agnostic; unchanged by this rewrite). The `Dockerfile` is multi-stage: `golang:1.26-bookworm` build → `gcr.io/distroless/static` runtime with the static binary, dropping the image from ~1 GB (Chromium) to ~15 MB.
+Pushes to `main` build and publish a multi-tag image to `ghcr.io/mateuxlucax/unifique-speedtest-exporter` via `.github/workflows/docker-publish.yml` (language-agnostic; unchanged by this rewrite). The `Dockerfile` is multi-stage: `golang:1.26-bookworm` build → `gcr.io/distroless/static` runtime with the static binary, dropping the image from ~2.1 GB (Chromium) to ~15 MB.

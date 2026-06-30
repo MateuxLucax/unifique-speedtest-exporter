@@ -1,18 +1,24 @@
 // Package exporter wires the speed test into Prometheus. It runs the test in
-// the background on an interval, caches the results as gauges, and serves them
-// instantly on every scrape — so Prometheus scrape timing is decoupled from the
+// the background on an interval, caches the results, and serves them instantly
+// on every scrape — so Prometheus scrape timing is decoupled from the
 // multi-minute test, and a single-flight guard ensures only one link-saturating
 // test runs at a time.
+//
+// It deliberately depends on nothing outside the standard library: the four
+// label-less gauges plus health metrics are emitted directly in the Prometheus
+// text exposition format, keeping the supply-chain attack surface at zero
+// third-party packages.
 package exporter
 
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/MateuxLucax/unifique-speedtest-exporter/internal/speedtest"
 )
@@ -30,54 +36,46 @@ type Runner interface {
 	Run(ctx context.Context) (speedtest.Result, error)
 }
 
-// Exporter holds the metric gauges and the single-flight guard.
+// snapshot is the cached result set served on every scrape.
+type snapshot struct {
+	download float64
+	upload   float64
+	ping     float64
+	jitter   float64
+
+	success         float64
+	durationSeconds float64
+	lastRunUnix     float64
+}
+
+// Exporter caches the latest test result and serves it as Prometheus metrics.
+// It implements http.Handler for the /metrics endpoint.
 type Exporter struct {
 	runner Runner
 
 	// RunTimeout bounds each individual test run. Defaults to DefaultRunTimeout.
 	RunTimeout time.Duration
 
-	mu sync.Mutex // single-flight: held for the duration of a run
+	runMu sync.Mutex // single-flight: held for the whole duration of a run
 
-	download prometheus.Gauge
-	upload   prometheus.Gauge
-	ping     prometheus.Gauge
-	jitter   prometheus.Gauge
-	success  prometheus.Gauge
-	duration prometheus.Gauge
-	lastRun  prometheus.Gauge
+	mu  sync.RWMutex // guards cur; held only briefly
+	cur snapshot
 }
 
-// New builds an Exporter and registers its metrics on reg.
-func New(runner Runner, reg prometheus.Registerer) *Exporter {
-	e := &Exporter{
-		runner:     runner,
-		RunTimeout: DefaultRunTimeout,
-		download:   gauge("speed_download_bits_per_second", "Download speed in bits per second"),
-		upload:     gauge("speed_upload_bits_per_second", "Upload speed in bits per second"),
-		ping:       gauge("speed_ping_ms", "Ping in milliseconds"),
-		jitter:     gauge("speed_jitter_ms", "Jitter in milliseconds"),
-		success:    gauge("speed_test_success", "1 if the last speed test succeeded, 0 otherwise"),
-		duration:   gauge("speed_test_duration_seconds", "Duration of the last speed test run in seconds"),
-		lastRun:    gauge("speed_test_last_run_timestamp_seconds", "Unix timestamp of the last speed test run"),
-	}
-	reg.MustRegister(e.download, e.upload, e.ping, e.jitter, e.success, e.duration, e.lastRun)
-	return e
-}
-
-func gauge(name, help string) prometheus.Gauge {
-	return prometheus.NewGauge(prometheus.GaugeOpts{Name: name, Help: help})
+// New builds an Exporter for the given runner.
+func New(runner Runner) *Exporter {
+	return &Exporter{runner: runner, RunTimeout: DefaultRunTimeout}
 }
 
 // RunOnce runs a single test under the single-flight guard and updates the
-// gauges. If a run is already in progress it returns ErrBusy without starting
-// another. On test failure it sets speed_test_success to 0 and leaves the last
-// good speed gauges untouched, so stale-but-valid data remains scrapeable.
+// cached snapshot. If a run is already in progress it returns ErrBusy without
+// starting another. On test failure it sets speed_test_success to 0 and leaves
+// the last good speed values intact, so stale-but-valid data stays scrapeable.
 func (e *Exporter) RunOnce(ctx context.Context) error {
-	if !e.mu.TryLock() {
+	if !e.runMu.TryLock() {
 		return ErrBusy
 	}
-	defer e.mu.Unlock()
+	defer e.runMu.Unlock()
 
 	timeout := e.RunTimeout
 	if timeout <= 0 {
@@ -88,18 +86,22 @@ func (e *Exporter) RunOnce(ctx context.Context) error {
 
 	start := time.Now()
 	res, err := e.runner.Run(runCtx)
-	e.duration.Set(time.Since(start).Seconds())
-	e.lastRun.Set(float64(time.Now().Unix()))
+	elapsed := time.Since(start).Seconds()
+	now := float64(time.Now().Unix())
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cur.durationSeconds = elapsed
+	e.cur.lastRunUnix = now
 	if err != nil {
-		e.success.Set(0)
+		e.cur.success = 0
 		return err
 	}
-
-	e.download.Set(res.DownloadBps)
-	e.upload.Set(res.UploadBps)
-	e.ping.Set(res.PingMs)
-	e.jitter.Set(res.JitterMs)
-	e.success.Set(1)
+	e.cur.download = res.DownloadBps
+	e.cur.upload = res.UploadBps
+	e.cur.ping = res.PingMs
+	e.cur.jitter = res.JitterMs
+	e.cur.success = 1
 	return nil
 }
 
@@ -125,4 +127,26 @@ func (e *Exporter) runAndLog(ctx context.Context) {
 	if err := e.RunOnce(ctx); err != nil && !errors.Is(err, ErrBusy) && ctx.Err() == nil {
 		log.Printf("speed test failed: %v", err)
 	}
+}
+
+// ServeHTTP writes the cached metrics in the Prometheus text exposition format.
+func (e *Exporter) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	e.mu.RLock()
+	m := e.cur
+	e.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	writeGauge(w, "speed_download_bits_per_second", "Download speed in bits per second", m.download)
+	writeGauge(w, "speed_upload_bits_per_second", "Upload speed in bits per second", m.upload)
+	writeGauge(w, "speed_ping_ms", "Ping in milliseconds", m.ping)
+	writeGauge(w, "speed_jitter_ms", "Jitter in milliseconds", m.jitter)
+	writeGauge(w, "speed_test_success", "1 if the last speed test succeeded, 0 otherwise", m.success)
+	writeGauge(w, "speed_test_duration_seconds", "Duration of the last speed test run in seconds", m.durationSeconds)
+	writeGauge(w, "speed_test_last_run_timestamp_seconds", "Unix timestamp of the last speed test run", m.lastRunUnix)
+}
+
+func writeGauge(w io.Writer, name, help string, value float64) {
+	io.WriteString(w, "# HELP "+name+" "+help+"\n")
+	io.WriteString(w, "# TYPE "+name+" gauge\n")
+	io.WriteString(w, name+" "+strconv.FormatFloat(value, 'g', -1, 64)+"\n")
 }

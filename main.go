@@ -12,9 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/MateuxLucax/unifique-speedtest-exporter/internal/exporter"
 	"github.com/MateuxLucax/unifique-speedtest-exporter/internal/speedtest"
 )
@@ -29,8 +26,7 @@ func main() {
 	cfg := speedtest.DefaultConfig(baseURL)
 	cfg.HTTPClient = speedtest.NewClient()
 
-	reg := prometheus.NewRegistry()
-	exp := exporter.New(cfg, reg)
+	exp := exporter.New(cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -38,7 +34,7 @@ func main() {
 	go exp.Start(ctx, interval)
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	mux.Handle("/metrics", exp)
 
 	srv := &http.Server{Addr: ":" + port, Handler: mux}
 	go func() {
