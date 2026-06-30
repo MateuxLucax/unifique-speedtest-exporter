@@ -1,0 +1,28 @@
+# Side-by-side comparison harness: runs the original Playwright/Node exporter
+# (built from the `main` branch) and the new Go exporter together, so their
+# metrics can be diffed on the same Unifique connection.
+#
+# Driven by ./compare.sh, which prepares the `main` worktree at ./.compare/main
+# before building. See that script for usage.
+services:
+  playwright:
+    build:
+      context: ./.compare/main
+    image: unifique-speedtest-exporter:playwright
+    container_name: speedtest-playwright
+    ports:
+      - "3001:3000"
+    environment:
+      - PORT=3000
+
+  go:
+    build:
+      context: .
+    image: unifique-speedtest-exporter:go
+    container_name: speedtest-go
+    ports:
+      - "3002:3000"
+    environment:
+      - PORT=3000
+      # Re-run frequently so each comparison row reflects a fresh background run.
+      - RUN_INTERVAL=1m

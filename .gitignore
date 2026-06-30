@@ -4,6 +4,9 @@
 *.test
 *.out
 
+# compare.sh worktree of the main branch
+/.compare/
+
 # dependencies (bun install)
 node_modules
 
