@@ -1,4 +1,4 @@
-# Build a static binary, then ship it on distroless — no Node, no Chromium.
+# Build a static binary, then ship it on distroless.
 FROM golang:1.26-bookworm AS build
 
 WORKDIR /src

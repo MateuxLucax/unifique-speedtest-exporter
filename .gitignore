@@ -4,7 +4,7 @@
 *.test
 *.out
 
-# Local-only comparison tooling (used to produce PR data, not part of the repo)
+# Local-only tooling, not part of the repo
 /compare.sh
 /compare.compose.yml
 /.compare/

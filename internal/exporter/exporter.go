@@ -4,10 +4,9 @@
 // multi-minute test, and a single-flight guard ensures only one link-saturating
 // test runs at a time.
 //
-// It deliberately depends on nothing outside the standard library: the four
-// label-less gauges plus health metrics are emitted directly in the Prometheus
-// text exposition format, keeping the supply-chain attack surface at zero
-// third-party packages.
+// It depends on nothing outside the standard library: the four label-less
+// gauges plus health metrics are emitted directly in the Prometheus text
+// exposition format, so the module needs no third-party packages.
 package exporter
 
 import (
