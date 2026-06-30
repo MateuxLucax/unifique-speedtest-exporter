@@ -1,3 +1,9 @@
+# Go
+/unifique-speedtest-exporter
+/bin/
+*.test
+*.out
+
 # dependencies (bun install)
 node_modules
 
