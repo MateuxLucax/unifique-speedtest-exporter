@@ -33,7 +33,23 @@ The exporter will be available at http://localhost:3000/metrics
 
 ### Docker Compose
 
-If you wish to setup this in a Docker Compose environment you can check the [docker-compose.yml](docker-compose.yml) file for an example configuration.
+Two compose files are provided:
+
+- **Easy replication** — pull and run the prebuilt image from GHCR ([docker-compose.yml](docker-compose.yml)):
+
+  ```bash
+  docker compose up -d
+  ```
+
+- **Build from source** — build the image locally, no published image required ([docker-compose.build.yml](docker-compose.build.yml)):
+
+  ```bash
+  docker compose -f docker-compose.build.yml up -d --build
+  ```
+
+Both expose `/metrics` on port 3000 and accept the same environment variables (see [Configuration](#configuration)).
+
+> The first scrape returns zeros until the initial background test finishes (~50 s); after that, `/metrics` serves the cached result instantly.
 
 ## Metrics
 
